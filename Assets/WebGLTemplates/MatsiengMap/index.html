@@ -229,16 +229,18 @@
         }
 
         var buildUrl = "Build";
-        var loaderUrl = buildUrl + "/matsieng game.loader.js";
+        var buildVersion = "2026-05-01-vercel-br-fix";
+        var cacheBuster = "?v=" + encodeURIComponent(buildVersion);
+        var loaderUrl = buildUrl + "/matsieng game.loader.js" + cacheBuster;
         var config = {
           arguments: [],
-          dataUrl: buildUrl + "/matsieng game.data.br",
-          frameworkUrl: buildUrl + "/matsieng game.framework.js.br",
-          codeUrl: buildUrl + "/matsieng game.wasm.br",
+          dataUrl: buildUrl + "/matsieng game.data.br" + cacheBuster,
+          frameworkUrl: buildUrl + "/matsieng game.framework.js.br" + cacheBuster,
+          codeUrl: buildUrl + "/matsieng game.wasm.br" + cacheBuster,
           streamingAssetsUrl: "StreamingAssets",
           companyName: "DefaultCompany",
           productName: "matsieng",
-          productVersion: "0.1.0",
+          productVersion: buildVersion,
           showBanner: unityShowBanner,
         };
 
