@@ -81,6 +81,48 @@
       #unity-canvas {
         width: 100%;
         height: 100%;
+        background: #071015;
+        display: block;
+      }
+
+      #unity-loading-bar {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(440px, calc(100vw - 48px));
+        transform: translate(-50%, -50%);
+        display: none;
+        color: #f7fbff;
+        text-align: center;
+      }
+
+      #unity-loading-text {
+        margin-bottom: 14px;
+        font-size: 17px;
+        font-weight: 700;
+      }
+
+      #unity-progress-bar-empty {
+        width: 100%;
+        height: 14px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+      }
+
+      #unity-progress-bar-full {
+        width: 0%;
+        height: 100%;
+        background: #e79b35;
+        transition: width 0.2s ease;
+      }
+
+      #unity-warning {
+        position: absolute;
+        left: 24px;
+        right: 24px;
+        bottom: 24px;
+        z-index: 10;
       }
 
       @media (max-width: 700px) {
@@ -121,6 +163,7 @@
     <div id="unity-container" class="unity-desktop">
       <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
       <div id="unity-loading-bar">
+        <div id="unity-loading-text">Loading Matsieng tour... 0%</div>
         <div id="unity-logo"></div>
         <div id="unity-progress-bar-empty">
           <div id="unity-progress-bar-full"></div>
@@ -262,7 +305,9 @@
         script.src = loaderUrl;
         script.onload = () => {
           createUnityInstance(canvas, config, (progress) => {
-            document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+            var percent = Math.round(100 * progress);
+            document.querySelector("#unity-progress-bar-full").style.width = percent + "%";
+            document.querySelector("#unity-loading-text").textContent = "Loading Matsieng tour... " + percent + "%";
           }).then((unityInstance) => {
             document.querySelector("#unity-loading-bar").style.display = "none";
             unityInstance.SendMessage("TourCameraMenu", "PlayIntroAudio");
@@ -272,6 +317,9 @@
           }).catch((message) => {
             alert(message);
           });
+        };
+        script.onerror = () => {
+          unityShowBanner("Unity loader could not load. Refresh the page or check the deployed Build folder.", "error");
         };
 
         document.body.appendChild(script);
