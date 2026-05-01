@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Lesotho Interactive Map</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    /* Prevent WebView scroll issues */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<script>
+  // ==============================
+  // 1. INITIALIZE MAP
+  // ==============================
+  var map = L.map('map').setView([-29.45, 27.70], 10);
+
+  // Load OpenStreetMap tiles (FREE)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+
+  // ==============================
+  // 2. UNITY COMMUNICATION BRIDGE
+  // ==============================
+  function sendToUnity(locationName) {
+    // unity-webview plugin communication
+    if (window.Unity && Unity.call) {
+      Unity.call(locationName);
+    } else {
+      // fallback (some Android builds)
+      window.location = "unity:" + locationName;
+    }
+  }
+
+
+  // ==============================
+  // 3. LOCATIONS (EXPANDABLE)
+  // ==============================
+  var locations = [
+    {
+      name: "Matsieng",
+      coords: [-29.45, 27.70]
+    },
+    {
+      name: "Katse Dam",
+      coords: [-29.33, 28.50]
+    },
+    {
+      name: "Thaba Bosiu",
+      coords: [-29.36, 27.74]
+    }
+  ];
+
+
+  // ==============================
+  // 4. ADD MARKERS
+  // ==============================
+  locations.forEach(function(loc) {
+
+    var marker = L.marker(loc.coords).addTo(map)
+      .bindPopup(loc.name);
+
+    marker.on('click', function () {
+      sendToUnity(loc.name);
+    });
+
+  });
+
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Matsieng Village Tour</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #071015;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      #map-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        background: #071015;
+      }
+
+      #map {
+        min-height: 0;
+        width: 100%;
+      }
+
+      #map-panel {
+        position: absolute;
+        left: 24px;
+        top: 24px;
+        width: min(420px, calc(100vw - 48px));
+        box-sizing: border-box;
+        padding: 22px 24px;
+        color: #f7fbff;
+        background: rgba(5, 12, 18, 0.86);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        box-shadow: 0 18px 46px rgba(0, 0, 0, 0.35);
+      }
+
+      #map-panel h1 {
+        margin: 0 0 8px;
+        font-size: 34px;
+        line-height: 1.08;
+      }
+
+      #map-panel p {
+        margin: 0;
+        font-size: 17px;
+        line-height: 1.5;
+        color: #d8e4ec;
+      }
+
+      #map-status {
+        position: absolute;
+        left: 24px;
+        bottom: 24px;
+        max-width: min(560px, calc(100vw - 48px));
+        box-sizing: border-box;
+        padding: 14px 18px;
+        color: #f7fbff;
+        background: rgba(5, 12, 18, 0.84);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        font-size: 16px;
+      }
+
+      #unity-container {
+        display: none;
+      }
+
+      #unity-container.unity-desktop,
+      #unity-container.unity-mobile {
+        width: 100%;
+        height: 100%;
+      }
+
+      #unity-canvas {
+        width: 100%;
+        height: 100%;
+      }
+
+      @media (max-width: 700px) {
+        #map-panel {
+          left: 14px;
+          top: 14px;
+          width: calc(100vw - 28px);
+          padding: 18px;
+        }
+
+        #map-panel h1 {
+          font-size: 28px;
+        }
+
+        #map-panel p,
+        #map-status {
+          font-size: 15px;
+        }
+
+        #map-status {
+          left: 14px;
+          bottom: 14px;
+          max-width: calc(100vw - 28px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map-screen">
+      <div id="map"></div>
+      <section id="map-panel" aria-label="Matsieng map intro">
+        <h1>Matsieng Village</h1>
+        <p>Click the Matsieng Village marker on the map to enter the interactive tour.</p>
+      </section>
+      <div id="map-status">Loading Google Maps...</div>
+    </div>
+
+    <div id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"> </div>
+      <div id="unity-footer">
+        <div id="unity-logo-title-footer"></div>
+        <div id="unity-fullscreen-button"></div>
+        <div id="unity-build-title">matsieng</div>
+      </div>
+    </div>
+
+    <script>
+      const GOOGLE_MAPS_API_KEY = "AIzaSyAIA0oEBJGuUnrXGB8Wzu_dHWn95L2yYeY";
+      const GOOGLE_MAP_ID = "cc2b74579e704cd64ed2bf5c";
+      const MATSIENG_POSITION = { lat: -29.6172, lng: 27.5665 };
+
+      let unityStarted = false;
+
+      window.gm_authFailure = function() {
+        document.querySelector("#map-status").textContent = "Google Maps rejected the API key. Check billing, Maps JavaScript API, and website restrictions.";
+      };
+
+      async function initMap() {
+        const status = document.querySelector("#map-status");
+
+        try {
+          const { Map } = await google.maps.importLibrary("maps");
+          const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+
+          const map = new Map(document.querySelector("#map"), {
+            center: MATSIENG_POSITION,
+            zoom: 15,
+            mapId: GOOGLE_MAP_ID,
+            mapTypeControl: false,
+            fullscreenControl: true,
+            streetViewControl: false
+          });
+
+          const marker = new AdvancedMarkerElement({
+            map,
+            position: MATSIENG_POSITION,
+            title: "Matsieng Village",
+            gmpClickable: true
+          });
+
+          const enterTour = () => {
+            status.textContent = "Loading Matsieng tour...";
+            document.querySelector("#map-screen").style.display = "none";
+            document.querySelector("#unity-container").style.display = "block";
+            startUnityGame();
+          };
+
+          marker.addListener("click", enterTour);
+          marker.addEventListener("gmp-click", enterTour);
+
+          status.textContent = "Click the Matsieng Village marker to start the tour.";
+        } catch (error) {
+          console.error(error);
+          status.textContent = "Google Maps could not load. Check your API key, Map ID, and allowed website restrictions.";
+        }
+      }
+
+      function loadGoogleMaps() {
+        if (GOOGLE_MAPS_API_KEY === "YOUR_GOOGLE_MAPS_API_KEY") {
+          document.querySelector("#map-status").textContent = "Add your Google Maps API key inside index.html.";
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(GOOGLE_MAPS_API_KEY) + "&callback=initMap&v=weekly&loading=async&libraries=marker";
+        script.async = true;
+        script.defer = true;
+        script.onerror = () => {
+          document.querySelector("#map-status").textContent = "Google Maps script failed to load.";
+        };
+        document.head.appendChild(script);
+      }
+
+      function startUnityGame() {
+        if (unityStarted) {
+          return;
+        }
+
+        unityStarted = true;
+
+        var canvas = document.querySelector("#unity-canvas");
+
+        function unityShowBanner(msg, type) {
+          var warningBanner = document.querySelector("#unity-warning");
+          function updateBannerVisibility() {
+            warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+          }
+          var div = document.createElement('div');
+          div.innerHTML = msg;
+          warningBanner.appendChild(div);
+          if (type == 'error') div.style = 'background: red; padding: 10px;';
+          else {
+            if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+            setTimeout(function() {
+              warningBanner.removeChild(div);
+              updateBannerVisibility();
+            }, 5000);
+          }
+          updateBannerVisibility();
+        }
+
+        var buildUrl = "Build";
+        var loaderUrl = buildUrl + "/matsieng game.loader.js";
+        var config = {
+          arguments: [],
+          dataUrl: buildUrl + "/matsieng game.data.br",
+          frameworkUrl: buildUrl + "/matsieng game.framework.js.br",
+          codeUrl: buildUrl + "/matsieng game.wasm.br",
+          streamingAssetsUrl: "StreamingAssets",
+          companyName: "DefaultCompany",
+          productName: "matsieng",
+          productVersion: "0.1.0",
+          showBanner: unityShowBanner,
+        };
+
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+          var meta = document.createElement('meta');
+          meta.name = 'viewport';
+          meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+          document.getElementsByTagName('head')[0].appendChild(meta);
+          document.querySelector("#unity-container").className = "unity-mobile";
+          canvas.className = "unity-mobile";
+        } else {
+          canvas.style.width = "100%";
+          canvas.style.height = "100%";
+        }
+
+        document.querySelector("#unity-loading-bar").style.display = "block";
+
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+          createUnityInstance(canvas, config, (progress) => {
+            document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+          }).then((unityInstance) => {
+            document.querySelector("#unity-loading-bar").style.display = "none";
+            unityInstance.SendMessage("TourCameraMenu", "PlayIntroAudio");
+            document.querySelector("#unity-fullscreen-button").onclick = () => {
+              unityInstance.SetFullscreen(1);
+            };
+          }).catch((message) => {
+            alert(message);
+          });
+        };
+
+        document.body.appendChild(script);
+      }
+
+      loadGoogleMaps();
+    </script>
+  </body>
+</html>

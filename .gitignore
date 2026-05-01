@@ -25,3 +25,7 @@ Thumbs.db
 # Large imported/demo folders not needed in the GitHub project snapshot
 Assets/TerrainDemoScene_URP/
 Assets/_Recovery/
+
+# Keep the deployable WebGL export in Git for Vercel.
+!WebGLBuild/
+!WebGLBuild/**
