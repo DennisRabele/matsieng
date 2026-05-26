@@ -15,11 +15,15 @@ public class TourCameraMenu : MonoBehaviour
     [SerializeField] private string wholeViewCameraName = "WholeViewCamera";
     [SerializeField] private string lakeCameraName = "LakeCamera";
     [SerializeField] private string villageCameraName = "VillageCamera";
+    [SerializeField] private string personCameraName = "personAround";
+    [SerializeField] private string personTargetName = "Ch12_nonPBR (1)";
+    [SerializeField] private bool villageCameraFollowsPerson = true;
 
     [Header("Labels")]
     [SerializeField] private string wholeViewButtonText = "See whole of Matsieng place";
     [SerializeField] private string lakeButtonText = "View Foothill and Dam";
     [SerializeField] private string villageButtonText = "Village";
+    [SerializeField] private string personButtonText = "Person Around";
 
     [Header("Style")]
     [SerializeField] private Color panelColor = new Color(0.04f, 0.06f, 0.08f, 0.84f);
@@ -47,6 +51,7 @@ public class TourCameraMenu : MonoBehaviour
     private GameObject wholeViewCamera;
     private GameObject lakeCamera;
     private GameObject villageCamera;
+    private GameObject personCamera;
     private Font uiFont;
     private AudioSource audioSource;
 
@@ -119,6 +124,11 @@ public class TourCameraMenu : MonoBehaviour
         wholeViewCamera = FindSceneObject(wholeViewCameraName);
         lakeCamera = FindSceneObject(lakeCameraName);
         villageCamera = FindSceneObject(villageCameraName);
+        personCamera = FindSceneObject(personCameraName);
+        EnsurePersonCamera();
+
+        if (villageCameraFollowsPerson && villageCamera != null)
+            EnsureFollowCamera(villageCamera, true);
     }
 
     private void BuildMenu()
@@ -140,7 +150,7 @@ public class TourCameraMenu : MonoBehaviour
         panelRect.anchorMax = new Vector2(0.5f, 1f);
         panelRect.pivot = new Vector2(0.5f, 1f);
         panelRect.anchoredPosition = new Vector2(0f, -28f);
-        panelRect.sizeDelta = new Vector2(1320f, 148f);
+        panelRect.sizeDelta = new Vector2(1680f, 148f);
 
         HorizontalLayoutGroup layout = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
         layout.padding = new RectOffset(22, 22, 22, 22);
@@ -158,8 +168,11 @@ public class TourCameraMenu : MonoBehaviour
         AddCameraButton(panel.transform, wholeViewButtonText, () => SelectCamera(0));
         AddCameraButton(panel.transform, lakeButtonText, () => SelectCamera(1));
         AddCameraButton(panel.transform, villageButtonText, () => SelectCamera(2));
+        AddCameraButton(panel.transform, personButtonText, () => SelectCamera(3));
 
-        if (lakeCamera != null && lakeCamera.activeInHierarchy)
+        if (personCamera != null && personCamera.activeInHierarchy)
+            UpdateButtonStates(3);
+        else if (lakeCamera != null && lakeCamera.activeInHierarchy)
             UpdateButtonStates(1);
         else if (wholeViewCamera != null && wholeViewCamera.activeInHierarchy)
             UpdateButtonStates(0);
@@ -198,8 +211,8 @@ public class TourCameraMenu : MonoBehaviour
         button.colors = colors;
 
         LayoutElement layout = buttonGo.AddComponent<LayoutElement>();
-        layout.minWidth = 320f;
-        layout.preferredWidth = 410f;
+        layout.minWidth = 260f;
+        layout.preferredWidth = 360f;
         layout.minHeight = 104f;
 
         Text text = CreateButtonText(buttonGo.transform, label);
@@ -240,6 +253,7 @@ public class TourCameraMenu : MonoBehaviour
             0 => wholeViewCamera,
             1 => lakeCamera,
             2 => villageCamera,
+            3 => EnsurePersonCamera(),
             _ => null
         };
 
@@ -263,6 +277,7 @@ public class TourCameraMenu : MonoBehaviour
             0 => wholeViewClip,
             1 => lakeClip,
             2 => villageClip,
+            3 => lakeClip,
             _ => null
         };
     }
@@ -326,6 +341,11 @@ public class TourCameraMenu : MonoBehaviour
         CameraMessageDisplay messageDisplay = cameraGo.GetComponent<CameraMessageDisplay>();
         if (messageDisplay != null)
             messageDisplay.ShowMessage();
+
+        if (cameraGo == personCamera)
+            EnsureFollowCamera(cameraGo, false);
+        else if (villageCameraFollowsPerson && cameraGo == villageCamera)
+            EnsureFollowCamera(cameraGo, true);
     }
 
     private void UpdateButtonStates(int activeIndex)
@@ -354,6 +374,66 @@ public class TourCameraMenu : MonoBehaviour
         }
 
         return null;
+    }
+
+    private GameObject EnsurePersonCamera()
+    {
+        if (personCamera == null)
+            personCamera = FindSceneObject(personCameraName);
+
+        if (personCamera == null)
+        {
+            personCamera = new GameObject(personCameraName);
+            personCamera.tag = "MainCamera";
+
+            Camera camera = personCamera.AddComponent<Camera>();
+            camera.clearFlags = CameraClearFlags.Skybox;
+            camera.fieldOfView = 65f;
+            camera.nearClipPlane = 0.3f;
+            camera.farClipPlane = 10000f;
+            camera.depth = 0f;
+
+            personCamera.AddComponent<AudioListener>();
+            personCamera.AddComponent<ThirdPersonFollowCamera>();
+            personCamera.SetActive(false);
+        }
+
+        if (personCamera.GetComponent<Camera>() == null)
+            personCamera.AddComponent<Camera>();
+
+        if (personCamera.GetComponent<AudioListener>() == null)
+            personCamera.AddComponent<AudioListener>();
+
+        EnsureFollowCamera(personCamera, false);
+
+        return personCamera;
+    }
+
+    private void EnsureFollowCamera(GameObject cameraGo, bool keepCurrentOffset)
+    {
+        if (cameraGo == null)
+            return;
+
+        ThirdPersonFollowCamera followCamera = cameraGo.GetComponent<ThirdPersonFollowCamera>();
+        if (followCamera == null)
+            followCamera = cameraGo.AddComponent<ThirdPersonFollowCamera>();
+
+        ConfigurePersonCameraTarget(followCamera, keepCurrentOffset);
+    }
+
+    private void ConfigurePersonCameraTarget(ThirdPersonFollowCamera followCamera, bool keepCurrentOffset)
+    {
+        if (followCamera == null)
+            return;
+
+        GameObject target = FindSceneObject(personTargetName);
+        if (target == null)
+        {
+            Debug.LogWarning($"{nameof(TourCameraMenu)} could not find '{personTargetName}' for the person camera.", this);
+            return;
+        }
+
+        followCamera.SetTarget(target.transform, keepCurrentOffset);
     }
 
     private static void EnsureEventSystem()

@@ -1,5 +1,8 @@
 using UnityEngine;
 using System.Collections;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 public class CharacterScrpit : MonoBehaviour
 {
@@ -56,6 +59,28 @@ public class CharacterScrpit : MonoBehaviour
     [SerializeField] private Animator animator;
     [SerializeField] private string movingBoolParameter = "IsMoving";
 
+    [Header("Keyboard Movement")]
+    [Tooltip("Use WASD/arrow keys to move this character freely instead of following waypoints.")]
+    [SerializeField] private bool useKeyboardInput = false;
+    [Min(0f)]
+    [SerializeField] private float keyboardMoveSpeed = 45f;
+    [Min(0f)]
+    [SerializeField] private float keyboardTurnSpeedDegrees = 540f;
+    [Tooltip("If enabled, movement follows the active camera's forward/right directions.")]
+    [SerializeField] private bool keyboardMovementRelativeToCamera = true;
+    [Tooltip("Keeps the character standing on active Unity Terrains while roaming.")]
+    [SerializeField] private bool keepKeyboardMovementOnTerrain = true;
+    [Tooltip("Small clearance between the character's lowest visible point and the terrain.")]
+    [SerializeField] private float keyboardGroundOffset = 0.05f;
+
+    [Header("Keyboard Collision")]
+    [Tooltip("Adds/uses a CharacterController so keyboard movement is stopped by solid colliders.")]
+    [SerializeField] private bool useKeyboardCollision = true;
+    [Range(0.1f, 1f)]
+    [SerializeField] private float keyboardCollisionRadiusScale = 0.35f;
+    [Min(0f)]
+    [SerializeField] private float keyboardCollisionHeightPadding = 0.1f;
+
     [Header("Playback")]
     [SerializeField] private bool playOnStart = true;
     [SerializeField] private bool snapToFirstWaypointOnStart = true;
@@ -69,22 +94,49 @@ public class CharacterScrpit : MonoBehaviour
     private TourMessageUI messageUi;
     private uint lastMessageSequence;
     private bool hasCameraComponent;
+    private Renderer[] groundSnapRenderers;
+    private CharacterController characterController;
 
     private void Awake()
     {
         hasCameraComponent = GetComponent<Camera>() != null;
+        groundSnapRenderers = GetComponentsInChildren<Renderer>();
+        characterController = GetComponent<CharacterController>();
     }
 
     private void Start()
     {
+        if (useKeyboardInput)
+        {
+            EnsureKeyboardCharacterController();
+            SnapToFirstWaypointIfConfigured();
+            SnapToTerrainIfNeeded();
+            SetMovingAnimation(false);
+            return;
+        }
+
         if (!playOnStart)
             return;
 
         Play();
     }
 
+    private void Update()
+    {
+        if (!useKeyboardInput)
+            return;
+
+        MoveFromKeyboard();
+    }
+
     public void Play()
     {
+        if (useKeyboardInput)
+        {
+            Stop();
+            return;
+        }
+
         if (moveRoutine != null)
         {
             StopCoroutine(moveRoutine);
@@ -124,7 +176,7 @@ public class CharacterScrpit : MonoBehaviour
         }
 
         if (snapToFirstWaypointOnStart)
-            transform.position = waypoints[0].position;
+            SnapToFirstWaypointIfConfigured();
 
         int segmentCount = waypoints.Length - 1;
         bool hasPerSegment = segmentDurationsSeconds != null && segmentDurationsSeconds.Length == segmentCount;
@@ -199,6 +251,227 @@ public class CharacterScrpit : MonoBehaviour
 
         if (disableComponentOnComplete)
             enabled = false;
+    }
+
+    private void MoveFromKeyboard()
+    {
+        Vector2 input = ReadKeyboardMovementInput();
+        input = Vector2.ClampMagnitude(input, 1f);
+
+        bool isMoving = input.sqrMagnitude > 0.0001f;
+        SetMovingAnimation(isMoving);
+
+        if (!isMoving)
+            return;
+
+        Vector3 moveDirection = GetWorldMoveDirection(input);
+        if (moveDirection.sqrMagnitude < 0.0001f)
+            return;
+
+        moveDirection.Normalize();
+        MoveKeyboardCharacter(moveDirection * keyboardMoveSpeed * Time.deltaTime);
+        SnapToTerrainIfNeeded();
+
+        if (keyboardTurnSpeedDegrees <= 0f)
+        {
+            transform.rotation = Quaternion.LookRotation(moveDirection, Vector3.up);
+            return;
+        }
+
+        Quaternion targetRotation = Quaternion.LookRotation(moveDirection, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation,
+            targetRotation,
+            keyboardTurnSpeedDegrees * Time.deltaTime);
+    }
+
+    private Vector2 ReadKeyboardMovementInput()
+    {
+        Vector2 input = Vector2.zero;
+
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+                input.x -= 1f;
+            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+                input.x += 1f;
+            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
+                input.y -= 1f;
+            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
+                input.y += 1f;
+        }
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        input.x += Input.GetAxisRaw("Horizontal");
+        input.y += Input.GetAxisRaw("Vertical");
+#endif
+
+        return input;
+    }
+
+    private Vector3 GetWorldMoveDirection(Vector2 input)
+    {
+        if (keyboardMovementRelativeToCamera && TryGetActiveCameraTransform(out Transform cameraTransform))
+        {
+            Vector3 cameraForward = Vector3.ProjectOnPlane(cameraTransform.forward, Vector3.up);
+            Vector3 cameraRight = Vector3.ProjectOnPlane(cameraTransform.right, Vector3.up);
+
+            if (cameraForward.sqrMagnitude > 0.0001f && cameraRight.sqrMagnitude > 0.0001f)
+                return cameraForward.normalized * input.y + cameraRight.normalized * input.x;
+        }
+
+        return new Vector3(input.x, 0f, input.y);
+    }
+
+    private void MoveKeyboardCharacter(Vector3 worldDelta)
+    {
+        if (useKeyboardCollision && characterController == null)
+            EnsureKeyboardCharacterController();
+
+        if (useKeyboardCollision && characterController != null && characterController.enabled)
+        {
+            characterController.Move(worldDelta);
+            return;
+        }
+
+        transform.position += worldDelta;
+    }
+
+    private void EnsureKeyboardCharacterController()
+    {
+        if (!useKeyboardCollision)
+            return;
+
+        if (characterController == null)
+            characterController = GetComponent<CharacterController>();
+
+        if (characterController == null)
+            characterController = gameObject.AddComponent<CharacterController>();
+
+        if (!TryGetRendererBounds(out Bounds bounds))
+            return;
+
+        float height = Mathf.Max(0.1f, bounds.size.y + keyboardCollisionHeightPadding);
+        float horizontalExtent = Mathf.Max(bounds.extents.x, bounds.extents.z);
+        float radius = Mathf.Clamp(horizontalExtent * keyboardCollisionRadiusScale, 0.1f, height * 0.45f);
+
+        characterController.height = height;
+        characterController.radius = radius;
+        characterController.center = transform.InverseTransformPoint(bounds.center);
+        characterController.skinWidth = Mathf.Max(0.01f, radius * 0.08f);
+        characterController.stepOffset = Mathf.Min(height * 0.25f, 0.5f);
+    }
+
+    private bool TryGetActiveCameraTransform(out Transform cameraTransform)
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null && mainCamera.isActiveAndEnabled)
+        {
+            cameraTransform = mainCamera.transform;
+            return true;
+        }
+
+        Camera activeCamera = FindFirstObjectByType<Camera>();
+        if (activeCamera != null)
+        {
+            cameraTransform = activeCamera.transform;
+            return true;
+        }
+
+        cameraTransform = null;
+        return false;
+    }
+
+    private void SnapToFirstWaypointIfConfigured()
+    {
+        if (!snapToFirstWaypointOnStart || waypoints == null || waypoints.Length == 0 || waypoints[0] == null)
+            return;
+
+        transform.position = waypoints[0].position;
+    }
+
+    private void SnapToTerrainIfNeeded()
+    {
+        if (!keepKeyboardMovementOnTerrain)
+            return;
+
+        if (!TryGetTerrainHeight(transform.position, out float terrainY))
+            return;
+
+        float targetBottomY = terrainY + keyboardGroundOffset;
+        if (TryGetLowestRendererY(out float currentBottomY))
+        {
+            transform.position += Vector3.up * (targetBottomY - currentBottomY);
+            return;
+        }
+
+        Vector3 fallbackPosition = transform.position;
+        fallbackPosition.y = targetBottomY;
+        transform.position = fallbackPosition;
+    }
+
+    private bool TryGetLowestRendererY(out float lowestY)
+    {
+        if (!TryGetRendererBounds(out Bounds bounds))
+        {
+            lowestY = float.PositiveInfinity;
+            return false;
+        }
+
+        lowestY = bounds.min.y;
+        return true;
+    }
+
+    private bool TryGetRendererBounds(out Bounds bounds)
+    {
+        if (groundSnapRenderers == null || groundSnapRenderers.Length == 0)
+            groundSnapRenderers = GetComponentsInChildren<Renderer>();
+
+        bounds = default;
+        bool hasBounds = false;
+        foreach (Renderer renderer in groundSnapRenderers)
+        {
+            if (renderer == null || !renderer.enabled)
+                continue;
+
+            if (!hasBounds)
+            {
+                bounds = renderer.bounds;
+                hasBounds = true;
+                continue;
+            }
+
+            bounds.Encapsulate(renderer.bounds);
+        }
+
+        return hasBounds;
+    }
+
+    private bool TryGetTerrainHeight(Vector3 worldPosition, out float terrainY)
+    {
+        Terrain[] activeTerrains = Terrain.activeTerrains;
+        foreach (Terrain terrain in activeTerrains)
+        {
+            if (terrain == null || terrain.terrainData == null)
+                continue;
+
+            Vector3 terrainPosition = terrain.transform.position;
+            Vector3 terrainSize = terrain.terrainData.size;
+            bool insideX = worldPosition.x >= terrainPosition.x && worldPosition.x <= terrainPosition.x + terrainSize.x;
+            bool insideZ = worldPosition.z >= terrainPosition.z && worldPosition.z <= terrainPosition.z + terrainSize.z;
+
+            if (!insideX || !insideZ)
+                continue;
+
+            terrainY = terrain.SampleHeight(worldPosition) + terrainPosition.y;
+            return true;
+        }
+
+        terrainY = worldPosition.y;
+        return false;
     }
 
     private IEnumerator PanYaw(float yawDegrees, float seconds)
