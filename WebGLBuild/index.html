@@ -272,14 +272,14 @@
         }
 
         var buildUrl = "Build";
-        var buildVersion = "2026-05-01-vercel-br-fix";
+        var buildVersion = "2026-05-26-character-update";
         var cacheBuster = "?v=" + encodeURIComponent(buildVersion);
-        var loaderUrl = buildUrl + "/matsieng game.loader.js" + cacheBuster;
+        var loaderUrl = buildUrl + "/WebGLBuild.loader.js" + cacheBuster;
         var config = {
           arguments: [],
-          dataUrl: buildUrl + "/matsieng game.data.br" + cacheBuster,
-          frameworkUrl: buildUrl + "/matsieng game.framework.js.br" + cacheBuster,
-          codeUrl: buildUrl + "/matsieng game.wasm.br" + cacheBuster,
+          dataUrl: buildUrl + "/WebGLBuild.data.br" + cacheBuster,
+          frameworkUrl: buildUrl + "/WebGLBuild.framework.js.br" + cacheBuster,
+          codeUrl: buildUrl + "/WebGLBuild.wasm.br" + cacheBuster,
           streamingAssetsUrl: "StreamingAssets",
           companyName: "DefaultCompany",
           productName: "matsieng",
